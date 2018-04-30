@@ -1,7 +1,7 @@
 <html>
 <head>
-<title>Pattern marker example with Three.js</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+<title>Box demo with Three.js</title>
+<meta meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
 <style>
 html,body {
 	margin: 0;
@@ -21,20 +21,93 @@ html,body {
 </head>
 <body>
 
-<h1>Pattern marker example with Three.js</h1>
+<h1>Box demo with Three.js</h1>
 <p>On Chrome on Android, tap the screen to start playing video stream.</p>
-<p>Show  <a href="https://github.com/artoolkit/artoolkit5/blob/master/doc/patterns/Hiro%20pattern.pdf">Hiro pattern</a> and <a href="https://github.com/artoolkit/artoolkit5/blob/master/doc/patterns/Kanji%20pattern.pdf">Kanji pattern</a> to camera to display a colorful objects on top of them. Tap the screen to rotate the objects.
+<p>Show <a href="https://github.com/artoolkit/artoolkit5/blob/master/doc/patterns/Matrix%20code%203x3%20(72dpi)/20.png">3x3 marker id 20</a> to camera to display a box on top of it. Tap the box to open it.
 
-<script async src="./artoolkit.min.js"></script>
-<script async src="./three.min.js"></script>
-<script async src="./artoolkit.three.js"></script>
+
+<p>&larr; <a href="index.html">Back to examples</a></p>
+
+<script async src="../build/artoolkit.min.js"></script>
+<script async src="js/third_party/three.js/three.min.js"></script>
+<script async src="../js/artoolkit.three.js"></script>
 
 <script>
+
+var findObjectUnderEvent = function(ev, camera, objects) {
+
+	var style = getComputedStyle(ev.target);
+	var elementTransform = style.getPropertyValue('transform');
+	var elementTransformOrigin = style.getPropertyValue('transform-origin');
+
+	var xyz = elementTransformOrigin.replace(/px/g, '').split(" ");
+	xyz[0] = parseFloat(xyz[0]);
+	xyz[1] = parseFloat(xyz[1]);
+	xyz[2] = parseFloat(xyz[2] || 0);
+
+	var mat = new THREE.Matrix4();
+	mat.identity();
+	if (/^matrix\(/.test(elementTransform)) {
+		var elems = elementTransform.replace(/^matrix\(|\)$/g, '').split(' ');
+		mat.elements[0] = parseFloat(elems[0]);
+		mat.elements[1] = parseFloat(elems[1]);
+		mat.elements[4] = parseFloat(elems[2]);
+		mat.elements[5] = parseFloat(elems[3]);
+		mat.elements[12] = parseFloat(elems[4]);
+		mat.elements[13] = parseFloat(elems[5]);
+	} else if (/^matrix3d\(/i.test(elementTransform)) {
+		var elems = elementTransform.replace(/^matrix3d\(|\)$/ig, '').split(' ');
+		for (var i=0; i<16; i++) {
+			mat.elements[i] = parseFloat(elems[i]);
+		}
+	}
+
+	var mat2 = new THREE.Matrix4();
+	mat2.makeTranslation(xyz[0], xyz[1], xyz[2]);
+	mat2.multiply(mat);
+	mat.makeTranslation(-xyz[0], -xyz[1], -xyz[2]);
+	mat2.multiply(mat);
+
+	var vec = new THREE.Vector3(ev.layerX, ev.layerY, 0);
+	vec.applyMatrix4(mat2);
+
+	var width = parseFloat(style.getPropertyValue('width'));
+	var height = parseFloat(style.getPropertyValue('height'));
+
+	var mouse3D = new THREE.Vector3(
+		( vec.x / width ) * 2 - 1,
+		-( vec.y / height ) * 2 + 1,
+		0.5
+	);
+	mouse3D.unproject( camera );
+	mouse3D.sub( camera.position );
+	mouse3D.normalize();
+	var raycaster = new THREE.Raycaster( camera.position, mouse3D );
+	var intersects = raycaster.intersectObjects( objects );
+	if ( intersects.length > 0 ) {
+		var obj = intersects[ 0 ].object
+		return obj;
+	}
+};
+
+
+var createBox = function() {
+	var box = new THREE.Object3D();
+	box.add(new THREE.Mesh( new THREE.BoxGeometry(1, 1, 1),
+							new THREE.MeshLambertMaterial({color: 0xffffff})));
+
+	box.position.z = 0.5;
+
+	return {box: box};
+};
+
 
 window.ARThreeOnLoad = function() {
 
 	ARController.getUserMediaThreeScene({maxARVideoSize: 320, cameraParam: 'Data/camera_para-iPhone 5 rear 640x480 1.0m.dat',
 	onSuccess: function(arScene, arController, arCamera) {
+
+		arController.setPatternDetectionMode(artoolkit.AR_MATRIX_CODE_DETECTION);
 
 		document.body.className = arController.orientation;
 
@@ -55,48 +128,21 @@ window.ARThreeOnLoad = function() {
 
 		document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
-		var rotationV = 0;
-		var rotationTarget = 0;
 
-		renderer.domElement.addEventListener('click', function(ev) {
-			ev.preventDefault();
-			rotationTarget += 1;
-		}, false);
+		// Create a couple of lights for our AR scene.
+		var light = new THREE.PointLight(0xffffff);
+		light.position.set(0, 5, -5);
+		arScene.scene.add(light);
 
-		var sphere = new THREE.Mesh(
-			new THREE.SphereGeometry(0.5, 8, 8),
-			new THREE.MeshNormalMaterial()
-		);
-		sphere.material.shading = THREE.FlatShading;
-		sphere.position.z = 0.5;
 
-		var torus = new THREE.Mesh(
-			new THREE.TorusGeometry(0.3, 0.2, 8, 8),
-			new THREE.MeshNormalMaterial()
-		);
-		torus.material.shading = THREE.FlatShading;
-		torus.position.z = 0.5;
-		torus.rotation.x = Math.PI/2;
+		var box = createBox();
 
-		arController.loadMarker('Data/patt.hiro', function(markerId) {
-			var markerRoot = arController.createThreeMarker(markerId);
-			markerRoot.add(sphere);
-			arScene.scene.add(markerRoot);
-		});
-
-		arController.loadMarker('Data/patt.kanji', function(markerId) {
-			var markerRoot = arController.createThreeMarker(markerId);
-			markerRoot.add(torus);
-			arScene.scene.add(markerRoot);
-		});
+		var markerRoot = arController.createThreeBarcodeMarker(20);
+		markerRoot.add(box.box);
+		arScene.scene.add(markerRoot);
 
 		var tick = function() {
 			arScene.process();
-
-			rotationV += (rotationTarget - sphere.rotation.z) * 0.05;
-			sphere.rotation.z += rotationV;
-			torus.rotation.y += rotationV;
-			rotationV *= 0.8;
 
 			arScene.renderOn(renderer);
 			requestAnimationFrame(tick);
