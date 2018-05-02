@@ -22,17 +22,25 @@ html,body {
 <body>
 
 <h1 id="test">Box demo with Three.js</h1>
+<h1>Player 1 score: <span id="score1"></span></h1>
+<h1>Player 2 score: <span id="score2"></span></h1>
 <p>On Chrome on Android, tap the screen to start playing video stream.</p>
 <p>Show <a href="https://github.com/artoolkit/artoolkit5/blob/master/doc/patterns/Matrix%20code%203x3%20(72dpi)/20.png">3x3 marker id 20</a> to camera to display a box on top of it. Tap the box to open it.
 
 
 <p>&larr; <a href="index.html">Back to examples</a></p>
 
-<script async src="../build/artoolkit.min.js"></script>
-<script async src="js/third_party/three.js/three.min.js"></script>
-<script async src="../js/artoolkit.three.js"></script>
+<script async src="./artoolkit.min.js"></script>
+<script async src="./three.min.js"></script>
+<script async src="./artoolkit.three.js"></script>
 
 <script>
+
+var score1 = 0;
+var PLAYER_1_ID = 5;
+
+var score2 = 0;
+var PLAYER_2_ID = 20;
 
 var findObjectUnderEvent = function(ev, camera, objects) {
 
@@ -93,16 +101,17 @@ var findObjectUnderEvent = function(ev, camera, objects) {
 
 var createBox = function() {
 	var box = new THREE.Mesh( new THREE.BoxGeometry(3, 1, 1),
-							  new THREE.MeshLambertMaterial({color: 0xffffff}));
-
+						new THREE.MeshLambertMaterial({color: 0xffffff}));
 	box.position.z = 0.5;
 
-	return {box: box};
+	return box;
 };
 
 var createSphere = function() {
-	var sphere = new THREE.Mesh( new THREE.SphereGeometry(0.5, 20, 20),
-								 new THREE.MeshLambertMaterial({color: 0xffffff}));
+	var sphere = new THREE.Mesh(
+								new THREE.SphereGeometry(0.5, 20, 20),
+							 	new THREE.MeshLambertMaterial({color: 0xffffff})
+							);
 
 	return sphere;
 }
@@ -118,24 +127,44 @@ function Ball(x, y, z){
 	this.xvel = -.1;
 	this.yvel = Math.random()*.1 - .05;
 
-	this.tick = function(){
+	this.tick = function(pos1, pos2) {
 		this.x += this.xvel;
 		this.y += this.yvel;
 
-		if(this.x < -4.8) { this.x = -4.8; this.xvel *= -1; }
-		if(this.x > 4.8) { this.x = 4.8; this.xvel *= -1; }
-		var ybound = 3.5;
-		if(this.y < -ybound) { this.y = -ybound; this.yvel *= -1; }
-		if(this.y > ybound) { this.y = ybound; this.yvel *= -1; }
+		var xbound = 4.8;
 
-		this.ball.position.set(this.x,this.y,this.z);
+		if (this.x < -xbound) {
+			// the ball hit the right side of the screen
+			this.x = -xbound;
+			this.xvel *= -1;
+			score1 += 1;
+		}
+		if (this.x > xbound) {
+			// the ball hit the left side of the screen
+			this.x = xbound;
+			this.xvel *= -1;
+			score2 += 1;
+		}
+
+		var ybound = 3.5;
+		if (this.y < -ybound) {
+			this.y = -ybound;
+			this.yvel *= -1;
+		}
+		if (this.y > ybound) {
+			this.y = ybound;
+			this.yvel *= -1;
+		}
+
+		this.ball.position.set(this.x, this.y, this.z);
 	}
 }
 
 var test = document.getElementById("test");
+var score1El = document.getElementById("score1");
+var score2El = document.getElementById("score2");
 
 window.ARThreeOnLoad = function() {
-
 	ARController.getUserMediaThreeScene({maxARVideoSize: 320, cameraParam: 'Data/camera_para-iPhone 5 rear 640x480 1.0m.dat',
 	onSuccess: function(arScene, arController, arCamera) {
 
@@ -160,33 +189,50 @@ window.ARThreeOnLoad = function() {
 
 		document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
-
 		var light = new THREE.PointLight(0xffffff);
 		light.position.set(0, -5, -5);
 		arScene.scene.add(light);
 
 		var paddle1 = createBox();
-		var markerRoot1 = arController.createThreeBarcodeMarker(20);
-		markerRoot1.add(paddle1.box);
+		paddle1.position.set(0, 0, 0);
+		paddle1.material.color.setHex(0xff0000);
+		var markerRoot1 = arController.createThreeBarcodeMarker(PLAYER_1_ID);
+		markerRoot1.add(paddle1);
 		arScene.scene.add(markerRoot1);
 
 		var paddle2 = createBox();
-		var markerRoot2 = arController.createThreeBarcodeMarker(5);
-		markerRoot2.add(paddle2.box);
+		paddle2.position.set(0, 0, 0);
+		paddle2.material.color.setHex(0x00ff00);
+		var markerRoot2 = arController.createThreeBarcodeMarker(PLAYER_2_ID);
+		markerRoot2.add(paddle2);
 		arScene.scene.add(markerRoot2);
-
 
 		var ball = new Ball(0, 0, 10);
 		arScene.scene.add(ball.ball);
 
+		var goal1 = new THREE.Mesh( new THREE.BoxGeometry(1, 10, 1), new THREE.MeshLambertMaterial({color: 0xffffff}));
+		goal1.material.color.setHex(0xff0000);
+		goal1.position.set(-5.5, 0, 10);
+		arScene.scene.add(goal1);
+
+		var goal2 = new THREE.Mesh( new THREE.BoxGeometry(1, 10, 1), new THREE.MeshLambertMaterial({color: 0xffffff}));
+		goal2.material.color.setHex(0x00ff00);
+		goal2.position.set(5.3, 0, 10);
+		arScene.scene.add(goal2);
+
 		var tick = function() {
-			ball.tick();
+			ball.tick(
+				arController.threeBarcodeMarkers[PLAYER_1_ID].getWorldPosition(),
+				arController.threeBarcodeMarkers[PLAYER_2_ID].getWorldPosition()
+			);
 			arScene.process();
 
 			test.innerHTML = markerRoot1.position.x;
+			score1El.innerHTML = score1;
+			score2El.innerHTML = score2;
 
 			arScene.renderOn(renderer);
-		    requestAnimationFrame(tick);
+		  requestAnimationFrame(tick);
 		};
 
 		tick();
@@ -194,7 +240,6 @@ window.ARThreeOnLoad = function() {
 	}});
 
 	delete window.ARThreeOnLoad;
-
 };
 
 if (window.ARController && ARController.getUserMediaThreeScene) {
