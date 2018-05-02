@@ -133,39 +133,41 @@ function Ball(x, y, z){
 		this.x += this.xvel;
 		this.y += this.yvel;
 
+		var xbound = 4.8;
+		var ybound = 3.5;
+		var paddleHeight = 3;
+
 		var paddle1Pos = paddle1.getWorldPosition().clone();
-		if (paddle1.visible && paddle1Pos.x && this.x > paddle1Pos.x) {
+		var paddle2Pos = paddle2.getWorldPosition().clone();
+
+		if (
+			paddle1.visible &&
+			this.x > paddle1Pos.x &&
+			!(this.y > paddle1Pos.y + paddleHeight/2 || this.y < paddle1Pos.y - paddleHeight/2)
+		) {
 			this.x = paddle1Pos.x;
 			this.xvel *= -1;
-		}
-
-		var paddle2Pos = paddle2.getWorldPosition().clone();
-		if (paddle2.visible && paddle2Pos.x && this.x < paddle2Pos.x) {
+		} else if (
+			paddle2.visible &&
+			this.x < paddle2Pos.x &&
+			!(this.y > paddle2Pos.y + paddleHeight/2 || this.y < paddle2Pos.y - paddleHeight/2)
+		) {
 			this.x = paddle2Pos.x;
 			this.xvel *= -1;
-		}
-
-		var xbound = 4.8;
-
-		if (this.x < -xbound) {
+		} else if (this.x < -xbound) {
 			// the ball hit the right side of the screen
 			this.x = -xbound;
 			this.xvel *= -1;
 			score1 += 1;
-		}
-		if (this.x > xbound) {
+		} else if (this.x > xbound) {
 			// the ball hit the left side of the screen
 			this.x = xbound;
 			this.xvel *= -1;
 			score2 += 1;
-		}
-
-		var ybound = 3.5;
-		if (this.y < -ybound) {
+		} else if (this.y < -ybound) {
 			this.y = -ybound;
 			this.yvel *= -1;
-		}
-		if (this.y > ybound) {
+		} else if (this.y > ybound) {
 			this.y = ybound;
 			this.yvel *= -1;
 		}
