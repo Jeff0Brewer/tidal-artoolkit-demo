@@ -100,7 +100,7 @@ var findObjectUnderEvent = function(ev, camera, objects) {
 
 
 var createBox = function() {
-	var box = new THREE.Mesh( new THREE.BoxGeometry(3, 1, 1),
+	var box = new THREE.Mesh( new THREE.BoxGeometry(3, .05, 1),
 						new THREE.MeshLambertMaterial({color: 0xffffff}));
 	box.position.z = 0.5;
 
@@ -127,9 +127,23 @@ function Ball(x, y, z){
 	this.xvel = -.1;
 	this.yvel = Math.random()*.1 - .05;
 
-	this.tick = function(pos1, pos2) {
+	// pos1: red paddle
+	// pos2: green paddle
+	this.tick = function(paddle1, paddle2) {
 		this.x += this.xvel;
 		this.y += this.yvel;
+
+		var paddle1Pos = paddle1.getWorldPosition().clone();
+		if (paddle1.visible && paddle1Pos.x && this.x > paddle1Pos.x) {
+			this.x = paddle1Pos.x;
+			this.xvel *= -1;
+		}
+
+		var paddle2Pos = paddle2.getWorldPosition().clone();
+		if (paddle2.visible && paddle2Pos.x && this.x < paddle2Pos.x) {
+			this.x = paddle2Pos.x;
+			this.xvel *= -1;
+		}
 
 		var xbound = 4.8;
 
@@ -222,8 +236,8 @@ window.ARThreeOnLoad = function() {
 
 		var tick = function() {
 			ball.tick(
-				arController.threeBarcodeMarkers[PLAYER_1_ID].getWorldPosition(),
-				arController.threeBarcodeMarkers[PLAYER_2_ID].getWorldPosition()
+				arController.threeBarcodeMarkers[PLAYER_1_ID],
+				arController.threeBarcodeMarkers[PLAYER_2_ID]
 			);
 			arScene.process();
 
