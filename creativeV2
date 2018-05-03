@@ -1,0 +1,211 @@
+<html>
+<head>
+<title>Lanch</title>
+<meta meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+<style>
+html,body {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	text-align: center;
+	overflow-x: hidden;
+}
+.portrait canvas {
+	transform-origin: 0 0;
+	transform: rotate(-90deg) translateX(-100%);
+}
+.desktop canvas {
+ 	transform: scale(-1, 1);
+}
+</style>
+</head>
+<body>
+
+<script async src="./artoolkit.min.js"></script>
+<script async src="./three.min.js"></script>
+<script async src="./artoolkit.three.js"></script>
+
+<script>
+
+var CANNON_ID = 20;
+var LIGHTER_ID = 5;
+
+var findObjectUnderEvent = function(ev, camera, objects) {
+
+	var style = getComputedStyle(ev.target);
+	var elementTransform = style.getPropertyValue('transform');
+	var elementTransformOrigin = style.getPropertyValue('transform-origin');
+
+	var xyz = elementTransformOrigin.replace(/px/g, '').split(" ");
+	xyz[0] = parseFloat(xyz[0]);
+	xyz[1] = parseFloat(xyz[1]);
+	xyz[2] = parseFloat(xyz[2] || 0);
+
+	var mat = new THREE.Matrix4();
+	mat.identity();
+	if (/^matrix\(/.test(elementTransform)) {
+		var elems = elementTransform.replace(/^matrix\(|\)$/g, '').split(' ');
+		mat.elements[0] = parseFloat(elems[0]);
+		mat.elements[1] = parseFloat(elems[1]);
+		mat.elements[4] = parseFloat(elems[2]);
+		mat.elements[5] = parseFloat(elems[3]);
+		mat.elements[12] = parseFloat(elems[4]);
+		mat.elements[13] = parseFloat(elems[5]);
+	} else if (/^matrix3d\(/i.test(elementTransform)) {
+		var elems = elementTransform.replace(/^matrix3d\(|\)$/ig, '').split(' ');
+		for (var i=0; i<16; i++) {
+			mat.elements[i] = parseFloat(elems[i]);
+		}
+	}
+
+	var mat2 = new THREE.Matrix4();
+	mat2.makeTranslation(xyz[0], xyz[1], xyz[2]);
+	mat2.multiply(mat);
+	mat.makeTranslation(-xyz[0], -xyz[1], -xyz[2]);
+	mat2.multiply(mat);
+
+	var vec = new THREE.Vector3(ev.layerX, ev.layerY, 0);
+	vec.applyMatrix4(mat2);
+
+	var width = parseFloat(style.getPropertyValue('width'));
+	var height = parseFloat(style.getPropertyValue('height'));
+
+	var mouse3D = new THREE.Vector3(
+		( vec.x / width ) * 2 - 1,
+		-( vec.y / height ) * 2 + 1,
+		0.5
+	);
+	mouse3D.unproject( camera );
+	mouse3D.sub( camera.position );
+	mouse3D.normalize();
+	var raycaster = new THREE.Raycaster( camera.position, mouse3D );
+	var intersects = raycaster.intersectObjects( objects );
+	if ( intersects.length > 0 ) {
+		var obj = intersects[ 0 ].object
+		return obj;
+	}
+};
+
+
+var createBox = function(h,w,d) {
+	var box = new THREE.Mesh( new THREE.BoxGeometry(h, w, d),
+						new THREE.MeshLambertMaterial({color: 0xffffff}));
+	box.position.z = d/2;
+
+	return box;
+};
+
+var createSphere = function() {
+	var sphere = new THREE.Mesh(
+								new THREE.SphereGeometry(0.5, 20, 20),
+							 	new THREE.MeshLambertMaterial({color: 0xffffff})
+							);
+	return sphere;
+}
+
+function Ball(x, y, z){
+	this.lastx = x;
+	this.x = x;
+	this.y = y;
+	this.z = z;
+	this.ball = new THREE.Mesh( new THREE.SphereGeometry(0.4, 20, 20),
+								new THREE.MeshLambertMaterial({color: 0x000000}));
+	this.ball.position.set(x,y,z);
+	this.xvel = 0;
+	this.yvel = 0;
+	this.zvel = 0;
+
+	this.tick = function(cannon, lighter) {
+		this.x += this.xvel;
+		this.y += this.yvel;
+		this.z += this.zvel;
+
+		var cannonpos = cannon.getWorldPosition().clone();
+		var lighterpos = lighter.getWorldPosition().clone();
+
+		if(cannonpos.z != .5 && lighterpos.z != .25 &&
+		   Math.sqrt(Math.pow(cannonpos.x - lighterpos.x, 2) + 
+					 Math.pow(cannonpos.y - lighterpos.y, 2) +
+					 Math.pow(cannonpos.z - lighterpos.z, 2)) < 1.5){
+			this.x = cannonpos.x/2 + lighterpos.x/2;
+			this.y = cannonpos.y/2 + lighterpos.y/2;
+			this.z = cannonpos.z + lighterpos.z/2;
+
+			var cannondir = cannon.getWorldDirection().clone();
+			var lighterdir = lighter.getWorldDirection().clone();
+
+			this.xvel = cannondir.x/2 + lighterdir.x/2;
+			this.yvel = cannondir.y/2 + lighterdir.y/2;
+			this.zvel = cannondir.z/2 + lighterdir.z/2;
+		}
+
+		this.ball.position.set(this.x, this.y, this.z);
+	}
+}
+
+window.ARThreeOnLoad = function() {
+	ARController.getUserMediaThreeScene({maxARVideoSize: 320, cameraParam: 'Data/camera_para-iPhone 5 rear 640x480 1.0m.dat',
+	onSuccess: function(arScene, arController, arCamera) {
+
+		arController.setPatternDetectionMode(artoolkit.AR_MATRIX_CODE_DETECTION);
+
+		document.body.className = arController.orientation;
+
+		var renderer = new THREE.WebGLRenderer({antialias: true});
+		if (arController.orientation === 'portrait') {
+			var w = (window.innerWidth / arController.videoHeight) * arController.videoWidth;
+			var h = window.innerWidth;
+			renderer.setSize(w, h);
+			renderer.domElement.style.paddingBottom = (w-h) + 'px';
+		} else {
+			if (/Android|mobile|iPad|iPhone/i.test(navigator.userAgent)) {
+				renderer.setSize(window.innerWidth, (window.innerWidth / arController.videoWidth) * arController.videoHeight);
+			} else {
+				renderer.setSize(arController.videoWidth, arController.videoHeight);
+				document.body.className += ' desktop';
+			}
+		}
+
+		document.body.insertBefore(renderer.domElement, document.body.firstChild);
+
+		var light = new THREE.PointLight(0xffffff);
+		light.position.set(0, -5, -5);
+		arScene.scene.add(light);
+
+		var cannon = createBox(1,1,1);
+		cannon.material.color.setHex(0xffff00);
+		var markerRoot1 = arController.createThreeBarcodeMarker(CANNON_ID);
+		markerRoot1.add(cannon);
+		arScene.scene.add(markerRoot1);
+
+		var lighter = createBox(1,1,1);
+		lighter.material.color.setHex(0xffff00);
+		var markerRoot2 = arController.createThreeBarcodeMarker(LIGHTER_ID);
+		markerRoot2.add(lighter);
+		arScene.scene.add(markerRoot2);
+
+		var ball = new Ball(0,0,0);
+		arScene.scene.add(ball.ball);
+
+		var tick = function() {
+			ball.tick(cannon, lighter);
+			arScene.process();
+
+			arScene.renderOn(renderer);
+		  requestAnimationFrame(tick);
+		};
+
+		tick();
+
+	}});
+
+	delete window.ARThreeOnLoad;
+};
+
+if (window.ARController && ARController.getUserMediaThreeScene) {
+	ARThreeOnLoad();
+}
+</script>
+
+</body>
+</html>
