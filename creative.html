@@ -1,6 +1,6 @@
 <html>
 <head>
-<title>Pong</title>
+<title>Lanch</title>
 <meta meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
 <style>
 html,body {
@@ -15,24 +15,22 @@ html,body {
 	transform: rotate(-90deg) translateX(-100%);
 }
 .desktop canvas {
+	width: 100vw;
+	height: 100vh;
  	transform: scale(-1, 1);
 }
 </style>
 </head>
 <body>
 
-<h1 id="test">Box demo with Three.js</h1>
-<p>On Chrome on Android, tap the screen to start playing video stream.</p>
-<p>Show <a href="https://github.com/artoolkit/artoolkit5/blob/master/doc/patterns/Matrix%20code%203x3%20(72dpi)/20.png">3x3 marker id 20</a> to camera to display a box on top of it. Tap the box to open it.
-
-
-<p>&larr; <a href="index.html">Back to examples</a></p>
-
-<script async src="../build/artoolkit.min.js"></script>
-<script async src="js/third_party/three.js/three.min.js"></script>
-<script async src="../js/artoolkit.three.js"></script>
+<script async src="./artoolkit.min.js"></script>
+<script async src="./three.min.js"></script>
+<script async src="./artoolkit.three.js"></script>
 
 <script>
+
+var CANNON_ID = 20;
+var LIGHTER_ID = 5;
 
 var findObjectUnderEvent = function(ev, camera, objects) {
 
@@ -73,69 +71,66 @@ var findObjectUnderEvent = function(ev, camera, objects) {
 
 	var width = parseFloat(style.getPropertyValue('width'));
 	var height = parseFloat(style.getPropertyValue('height'));
-
-	var mouse3D = new THREE.Vector3(
-		( vec.x / width ) * 2 - 1,
-		-( vec.y / height ) * 2 + 1,
-		0.5
-	);
-	mouse3D.unproject( camera );
-	mouse3D.sub( camera.position );
-	mouse3D.normalize();
-	var raycaster = new THREE.Raycaster( camera.position, mouse3D );
-	var intersects = raycaster.intersectObjects( objects );
-	if ( intersects.length > 0 ) {
-		var obj = intersects[ 0 ].object
-		return obj;
-	}
 };
 
 
-var createBox = function() {
-	var box = new THREE.Mesh( new THREE.BoxGeometry(3, 1, 1),
-							  new THREE.MeshLambertMaterial({color: 0xffffff}));
+var createBox = function(h,w,d) {
+	var box = new THREE.Mesh( new THREE.BoxGeometry(h, w, d),
+						new THREE.MeshLambertMaterial({color: 0xffffff}));
+	box.position.z = d/2;
 
-	box.position.z = 0.5;
-
-	return {box: box};
+	return box;
 };
 
 var createSphere = function() {
-	var sphere = new THREE.Mesh( new THREE.SphereGeometry(0.5, 20, 20),
-								 new THREE.MeshLambertMaterial({color: 0xffffff}));
-
+	var sphere = new THREE.Mesh(
+								new THREE.SphereGeometry(0.5, 20, 20),
+							 	new THREE.MeshLambertMaterial({color: 0xffffff})
+							);
 	return sphere;
 }
 
 function Ball(x, y, z){
+	this.lastx = x;
 	this.x = x;
 	this.y = y;
 	this.z = z;
-	this.ball = new THREE.Mesh( new THREE.SphereGeometry(0.5, 20, 20),
-								new THREE.MeshLambertMaterial({color: 0xffffff}));
+	this.ball = new THREE.Mesh( new THREE.SphereGeometry(0.4, 20, 20),
+								new THREE.MeshLambertMaterial({color: 0x000000}));
 	this.ball.position.set(x,y,z);
-	//this.xvel = Math.random() > .5 ? -.1 : .1;
-	this.xvel = -.1;
-	this.yvel = Math.random()*.1 - .05;
+	this.xvel = 0;
+	this.yvel = 0;
+	this.zvel = 0;
 
-	this.tick = function(){
+	this.tick = function(cannon, lighter) {
 		this.x += this.xvel;
 		this.y += this.yvel;
+		this.z += this.zvel;
 
-		if(this.x < -4.8) { this.x = -4.8; this.xvel *= -1; }
-		if(this.x > 4.8) { this.x = 4.8; this.xvel *= -1; }
-		var ybound = 3.5;
-		if(this.y < -ybound) { this.y = -ybound; this.yvel *= -1; }
-		if(this.y > ybound) { this.y = ybound; this.yvel *= -1; }
+		var cannonpos = cannon.getWorldPosition().clone();
+		var lighterpos = lighter.getWorldPosition().clone();
 
-		this.ball.position.set(this.x,this.y,this.z);
+		if(cannonpos.z != .75 && lighterpos.z != .75 &&
+		   Math.sqrt(Math.pow(cannonpos.x - lighterpos.x, 2) + 
+					 Math.pow(cannonpos.y - lighterpos.y, 2) +
+					 Math.pow(cannonpos.z - lighterpos.z, 2)) < 1.5){
+			this.x = cannonpos.x/2 + lighterpos.x/2;
+			this.y = cannonpos.y/2 + lighterpos.y/2;
+			this.z = cannonpos.z + lighterpos.z/2;
+
+			var cannondir = cannon.getWorldDirection().clone();
+			var lighterdir = lighter.getWorldDirection().clone();
+
+			this.xvel = cannondir.x/2 + lighterdir.x/2;
+			this.yvel = cannondir.y/2 + lighterdir.y/2;
+			this.zvel = cannondir.z/2 + lighterdir.z/2;
+		}
+
+		this.ball.position.set(this.x, this.y, this.z);
 	}
 }
 
-var test = document.getElementById("test");
-
 window.ARThreeOnLoad = function() {
-
 	ARController.getUserMediaThreeScene({maxARVideoSize: 320, cameraParam: 'Data/camera_para-iPhone 5 rear 640x480 1.0m.dat',
 	onSuccess: function(arScene, arController, arCamera) {
 
@@ -160,33 +155,31 @@ window.ARThreeOnLoad = function() {
 
 		document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
-
 		var light = new THREE.PointLight(0xffffff);
 		light.position.set(0, -5, -5);
 		arScene.scene.add(light);
 
-		var paddle1 = createBox();
-		var markerRoot1 = arController.createThreeBarcodeMarker(20);
-		markerRoot1.add(paddle1.box);
+		var cannon = createBox(1,1,1.5);
+		cannon.material.color.setHex(0xffff00);
+		var markerRoot1 = arController.createThreeBarcodeMarker(CANNON_ID);
+		markerRoot1.add(cannon);
 		arScene.scene.add(markerRoot1);
 
-		var paddle2 = createBox();
-		var markerRoot2 = arController.createThreeBarcodeMarker(5);
-		markerRoot2.add(paddle2.box);
+		var lighter = createBox(1,1,1.5);
+		lighter.material.color.setHex(0xffff00);
+		var markerRoot2 = arController.createThreeBarcodeMarker(LIGHTER_ID);
+		markerRoot2.add(lighter);
 		arScene.scene.add(markerRoot2);
 
-
-		var ball = new Ball(0, 0, 10);
+		var ball = new Ball(10,10,0);
 		arScene.scene.add(ball.ball);
 
 		var tick = function() {
-			ball.tick();
+			ball.tick(cannon, lighter);
 			arScene.process();
 
-			test.innerHTML = markerRoot1.position.x;
-
 			arScene.renderOn(renderer);
-		    requestAnimationFrame(tick);
+		  requestAnimationFrame(tick);
 		};
 
 		tick();
@@ -194,7 +187,6 @@ window.ARThreeOnLoad = function() {
 	}});
 
 	delete window.ARThreeOnLoad;
-
 };
 
 if (window.ARController && ARController.getUserMediaThreeScene) {
